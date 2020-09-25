@@ -3,7 +3,7 @@ package rest
 import (
 	"github.com/eyebluecn/tank/code/core"
 	"github.com/eyebluecn/tank/code/tool/result"
-	"github.com/nu7hatch/gouuid"
+	"github.com/eyebluecn/tank/code/tool/uuid"
 	"time"
 )
 
@@ -63,6 +63,13 @@ func (this *SessionDao) Delete(uuid string) {
 	session.ExpireTime = time.Now()
 	db := core.CONTEXT.GetDB().Delete(session)
 
+	this.PanicError(db.Error)
+
+}
+
+func (this *SessionDao) DeleteByUserUuid(userUuid string) {
+
+	db := core.CONTEXT.GetDB().Where("user_uuid = ?", userUuid).Delete(Session{})
 	this.PanicError(db.Error)
 
 }

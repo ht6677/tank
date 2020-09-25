@@ -6,8 +6,8 @@ import (
 	"github.com/eyebluecn/tank/code/tool/builder"
 	"github.com/eyebluecn/tank/code/tool/result"
 	"github.com/eyebluecn/tank/code/tool/util"
+	"github.com/eyebluecn/tank/code/tool/uuid"
 	"github.com/jinzhu/gorm"
-	"github.com/nu7hatch/gouuid"
 	"os"
 	"path/filepath"
 	"time"
@@ -182,6 +182,11 @@ func (this *ImageCacheDao) DeleteByMatterUuid(matterUuid string) {
 		this.deleteFileAndDir(imageCache)
 	}
 
+}
+
+func (this *ImageCacheDao) DeleteByUserUuid(userUuid string) {
+	db := core.CONTEXT.GetDB().Where("user_uuid = ?", userUuid).Delete(ImageCache{})
+	this.PanicError(db.Error)
 }
 
 func (this *ImageCacheDao) SizeBetweenTime(startTime time.Time, endTime time.Time) int64 {

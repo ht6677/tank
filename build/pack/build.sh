@@ -9,7 +9,7 @@
 #prepare the variables.
 
 # version name
-VERSION_NAME=tank-3.0.6
+VERSION_NAME=tank-3.1.1
 echo "VERSION_NAME: ${VERSION_NAME}"
 #  golang proxy
 GOPROXY=https://athens.azurefd.net
@@ -47,8 +47,8 @@ echo "DIST_PATH: ${DIST_PATH}"
 
 cd ${PROJECT_DIR}
 
-echo "go build -mod=readonly"
-go build -mod=readonly
+echo "go build"
+go build
 
 # if a directory
 if [[ -d COMPONENT_DIR ]] ; then

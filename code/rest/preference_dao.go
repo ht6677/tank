@@ -3,7 +3,7 @@ package rest
 import (
 	"github.com/eyebluecn/tank/code/core"
 	"github.com/eyebluecn/tank/code/tool/result"
-	"github.com/nu7hatch/gouuid"
+	"github.com/eyebluecn/tank/code/tool/uuid"
 	"time"
 )
 
@@ -22,8 +22,8 @@ func (this *PreferenceDao) Fetch() *Preference {
 		if db.Error.Error() == result.DB_ERROR_NOT_FOUND {
 			preference.Name = "EyeblueTank"
 			preference.Version = core.VERSION
-			//Default Office preview url.
-			preference.OfficeUrl = "https://view.officeapps.live.com/op/embed.aspx?src="
+			preference.PreviewConfig = "{}"
+			preference.ScanConfig = "{}"
 			this.Create(preference)
 			return preference
 		} else {

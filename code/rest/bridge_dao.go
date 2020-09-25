@@ -4,9 +4,8 @@ import (
 	"github.com/eyebluecn/tank/code/core"
 	"github.com/eyebluecn/tank/code/tool/builder"
 	"github.com/eyebluecn/tank/code/tool/result"
+	"github.com/eyebluecn/tank/code/tool/uuid"
 	"github.com/jinzhu/gorm"
-
-	"github.com/nu7hatch/gouuid"
 	"time"
 )
 
@@ -59,7 +58,7 @@ func (this *BridgeDao) CheckByShareUuidAndMatterUuid(shareUuid string, matterUui
 }
 
 //get pager
-func (this *BridgeDao) Page(page int, pageSize int, shareUuid string, sortArray []builder.OrderPair) *Pager {
+func (this *BridgeDao) PlainPage(page int, pageSize int, shareUuid string, sortArray []builder.OrderPair) (int, []*Bridge) {
 
 	var wp = &builder.WherePair{}
 
@@ -77,6 +76,14 @@ func (this *BridgeDao) Page(page int, pageSize int, shareUuid string, sortArray 
 	var bridges []*Bridge
 	db = conditionDB.Order(this.GetSortString(sortArray)).Offset(page * pageSize).Limit(pageSize).Find(&bridges)
 	this.PanicError(db.Error)
+
+	return count, bridges
+}
+
+//get pager
+func (this *BridgeDao) Page(page int, pageSize int, shareUuid string, sortArray []builder.OrderPair) *Pager {
+
+	count, bridges := this.PlainPage(page, pageSize, shareUuid, sortArray)
 	pager := NewPager(page, pageSize, count, bridges)
 
 	return pager

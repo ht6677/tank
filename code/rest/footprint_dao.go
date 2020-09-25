@@ -6,7 +6,7 @@ import (
 	"github.com/eyebluecn/tank/code/tool/result"
 	"github.com/jinzhu/gorm"
 
-	"github.com/nu7hatch/gouuid"
+	"github.com/eyebluecn/tank/code/tool/uuid"
 	"time"
 )
 
@@ -135,6 +135,13 @@ func (this *FootprintDao) AvgCostBetweenTime(startTime time.Time, endTime time.T
 func (this *FootprintDao) DeleteByCreateTimeBefore(createTime time.Time) {
 	db := core.CONTEXT.GetDB().Where("create_time < ?", createTime).Delete(Footprint{})
 	this.PanicError(db.Error)
+}
+
+func (this *FootprintDao) DeleteByUserUuid(userUuid string) {
+
+	db := core.CONTEXT.GetDB().Where("user_uuid = ?", userUuid).Delete(Footprint{})
+	this.PanicError(db.Error)
+
 }
 
 //System cleanup.

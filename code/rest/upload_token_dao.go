@@ -3,7 +3,7 @@ package rest
 import (
 	"github.com/eyebluecn/tank/code/core"
 	"github.com/eyebluecn/tank/code/tool/result"
-	"github.com/nu7hatch/gouuid"
+	"github.com/eyebluecn/tank/code/tool/uuid"
 	"time"
 )
 
@@ -55,4 +55,11 @@ func (this *UploadTokenDao) Save(uploadToken *UploadToken) *UploadToken {
 	this.PanicError(db.Error)
 
 	return uploadToken
+}
+
+func (this *UploadTokenDao) DeleteByUserUuid(userUuid string) {
+
+	db := core.CONTEXT.GetDB().Where("user_uuid = ?", userUuid).Delete(UploadToken{})
+	this.PanicError(db.Error)
+
 }

@@ -5,8 +5,9 @@ import (
 	"github.com/eyebluecn/tank/code/tool/builder"
 	"github.com/eyebluecn/tank/code/tool/result"
 	"github.com/eyebluecn/tank/code/tool/util"
+	"github.com/eyebluecn/tank/code/tool/uuid"
 	"github.com/jinzhu/gorm"
-	"github.com/nu7hatch/gouuid"
+	"math"
 	"os"
 	"time"
 )
@@ -212,10 +213,19 @@ func (this *MatterDao) FindByUserUuidAndPuuidAndDirAndName(userUuid string, puui
 }
 
 func (this *MatterDao) FindByPuuidAndUserUuid(puuid string, userUuid string, sortArray []builder.OrderPair) []*Matter {
+	return this.FindByPuuidAndUserUuidAndDeleted(puuid, userUuid, "", sortArray)
+}
+
+func (this *MatterDao) FindByPuuidAndUserUuidAndDeleted(puuid string, userUuid string, deleted string, sortArray []builder.OrderPair) []*Matter {
 	var matters []*Matter
 
 	var wp = &builder.WherePair{}
 	wp = wp.And(&builder.WherePair{Query: "puuid = ? AND user_uuid = ?", Args: []interface{}{puuid, userUuid}})
+	if deleted == TRUE {
+		wp = wp.And(&builder.WherePair{Query: "deleted = 1", Args: []interface{}{}})
+	} else if deleted == FALSE {
+		wp = wp.And(&builder.WherePair{Query: "deleted = 0", Args: []interface{}{}})
+	}
 
 	if sortArray == nil {
 
@@ -245,7 +255,17 @@ func (this *MatterDao) FindByUuids(uuids []string, sortArray []builder.OrderPair
 
 	return matters
 }
-func (this *MatterDao) PlainPage(page int, pageSize int, puuid string, userUuid string, name string, dir string, extensions []string, sortArray []builder.OrderPair) (int, []*Matter) {
+func (this *MatterDao) PlainPage(
+	page int,
+	pageSize int,
+	puuid string,
+	userUuid string,
+	name string,
+	dir string,
+	deleted string,
+	deleteTimeBefore *time.Time,
+	extensions []string,
+	sortArray []builder.OrderPair) (int, []*Matter) {
 
 	var wp = &builder.WherePair{}
 
@@ -261,10 +281,20 @@ func (this *MatterDao) PlainPage(page int, pageSize int, puuid string, userUuid 
 		wp = wp.And(&builder.WherePair{Query: "name LIKE ?", Args: []interface{}{"%" + name + "%"}})
 	}
 
+	if deleteTimeBefore != nil {
+		wp = wp.And(&builder.WherePair{Query: "delete_time < ?", Args: []interface{}{&deleteTimeBefore}})
+	}
+
 	if dir == TRUE {
 		wp = wp.And(&builder.WherePair{Query: "dir = ?", Args: []interface{}{1}})
 	} else if dir == FALSE {
 		wp = wp.And(&builder.WherePair{Query: "dir = ?", Args: []interface{}{0}})
+	}
+
+	if deleted == TRUE {
+		wp = wp.And(&builder.WherePair{Query: "deleted = ?", Args: []interface{}{1}})
+	} else if deleted == FALSE {
+		wp = wp.And(&builder.WherePair{Query: "deleted = ?", Args: []interface{}{0}})
 	}
 
 	var conditionDB *gorm.DB
@@ -290,12 +320,47 @@ func (this *MatterDao) PlainPage(page int, pageSize int, puuid string, userUuid 
 
 	return count, matters
 }
-func (this *MatterDao) Page(page int, pageSize int, puuid string, userUuid string, name string, dir string, extensions []string, sortArray []builder.OrderPair) *Pager {
+func (this *MatterDao) Page(page int, pageSize int, puuid string, userUuid string, name string, dir string, deleted string, extensions []string, sortArray []builder.OrderPair) *Pager {
 
-	count, matters := this.PlainPage(page, pageSize, puuid, userUuid, name, dir, extensions, sortArray)
+	count, matters := this.PlainPage(page, pageSize, puuid, userUuid, name, dir, deleted, nil, extensions, sortArray)
 	pager := NewPager(page, pageSize, count, matters)
 
 	return pager
+}
+
+//handle matter page by page.
+func (this *MatterDao) PageHandle(
+	puuid string,
+	userUuid string,
+	name string,
+	dir string,
+	deleted string,
+	deleteTimeBefore *time.Time,
+	sortArray []builder.OrderPair,
+	fun func(matter *Matter)) {
+
+	pageSize := 1000
+	if sortArray == nil || len(sortArray) == 0 {
+		sortArray = []builder.OrderPair{
+			{
+				Key:   "uuid",
+				Value: DIRECTION_ASC,
+			},
+		}
+	}
+
+	count, _ := this.PlainPage(0, pageSize, puuid, userUuid, name, dir, deleted, deleteTimeBefore, nil, sortArray)
+	if count > 0 {
+		var totalPages = int(math.Ceil(float64(count) / float64(pageSize)))
+
+		var page int
+		for page = 0; page < totalPages; page++ {
+			_, matters := this.PlainPage(0, pageSize, puuid, userUuid, name, dir, deleted, deleteTimeBefore, nil, sortArray)
+			for _, matter := range matters {
+				fun(matter)
+			}
+		}
+	}
 }
 
 func (this *MatterDao) Create(matter *Matter) *Matter {
@@ -322,7 +387,7 @@ func (this *MatterDao) Save(matter *Matter) *Matter {
 
 //download time add 1
 func (this *MatterDao) TimesIncrement(matterUuid string) {
-	db := core.CONTEXT.GetDB().Model(&Matter{}).Where("uuid = ?", matterUuid).Update("times", gorm.Expr("times + 1"))
+	db := core.CONTEXT.GetDB().Model(&Matter{}).Where("uuid = ?", matterUuid).Update(map[string]interface{}{"times": gorm.Expr("times + 1"), "visit_time": time.Now()})
 	this.PanicError(db.Error)
 }
 
@@ -383,6 +448,31 @@ func (this *MatterDao) Delete(matter *Matter) {
 		}
 
 	}
+}
+
+//soft delete a file or dir
+func (this *MatterDao) SoftDelete(matter *Matter) {
+
+	//soft delete from db.
+	db := core.CONTEXT.GetDB().Model(&Matter{}).Where("uuid = ?", matter.Uuid).Update(map[string]interface{}{"deleted": true, "delete_time": time.Now()})
+	this.PanicError(db.Error)
+
+}
+
+//recovery a file
+func (this *MatterDao) Recovery(matter *Matter) {
+
+	//recovery from db.
+	db := core.CONTEXT.GetDB().Model(&Matter{}).Where("uuid = ?", matter.Uuid).Update(map[string]interface{}{"deleted": false, "delete_time": time.Now()})
+	this.PanicError(db.Error)
+
+}
+
+func (this *MatterDao) DeleteByUserUuid(userUuid string) {
+
+	db := core.CONTEXT.GetDB().Where("user_uuid = ?", userUuid).Delete(Matter{})
+	this.PanicError(db.Error)
+
 }
 
 func (this *MatterDao) CountBetweenTime(startTime time.Time, endTime time.Time) int64 {

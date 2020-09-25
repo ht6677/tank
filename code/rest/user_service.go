@@ -5,8 +5,9 @@ import (
 	"github.com/eyebluecn/tank/code/tool/cache"
 	"github.com/eyebluecn/tank/code/tool/result"
 	"github.com/eyebluecn/tank/code/tool/util"
-	gouuid "github.com/nu7hatch/gouuid"
+	"github.com/eyebluecn/tank/code/tool/uuid"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -18,6 +19,15 @@ type UserService struct {
 
 	//file lock
 	locker *cache.Table
+
+	matterDao        *MatterDao
+	matterService    *MatterService
+	imageCacheDao    *ImageCacheDao
+	shareDao         *ShareDao
+	shareService     *ShareService
+	downloadTokenDao *DownloadTokenDao
+	uploadTokenDao   *UploadTokenDao
+	footprintDao     *FootprintDao
 }
 
 func (this *UserService) Init() {
@@ -31,6 +41,41 @@ func (this *UserService) Init() {
 	b = core.CONTEXT.GetBean(this.sessionDao)
 	if b, ok := b.(*SessionDao); ok {
 		this.sessionDao = b
+	}
+
+	b = core.CONTEXT.GetBean(this.matterDao)
+	if b, ok := b.(*MatterDao); ok {
+		this.matterDao = b
+	}
+
+	b = core.CONTEXT.GetBean(this.matterService)
+	if b, ok := b.(*MatterService); ok {
+		this.matterService = b
+	}
+
+	b = core.CONTEXT.GetBean(this.imageCacheDao)
+	if b, ok := b.(*ImageCacheDao); ok {
+		this.imageCacheDao = b
+	}
+
+	b = core.CONTEXT.GetBean(this.shareService)
+	if b, ok := b.(*ShareService); ok {
+		this.shareService = b
+	}
+
+	b = core.CONTEXT.GetBean(this.downloadTokenDao)
+	if b, ok := b.(*DownloadTokenDao); ok {
+		this.downloadTokenDao = b
+	}
+
+	b = core.CONTEXT.GetBean(this.uploadTokenDao)
+	if b, ok := b.(*UploadTokenDao); ok {
+		this.uploadTokenDao = b
+	}
+
+	b = core.CONTEXT.GetBean(this.footprintDao)
+	if b, ok := b.(*FootprintDao); ok {
+		this.footprintDao = b
 	}
 
 	//create a lock cache.
@@ -124,7 +169,7 @@ func (this *UserService) PreHandle(writer http.ResponseWriter, request *http.Req
 				} else {
 
 					this.logger.Info("load a temp session by username and password.")
-					timeUUID, _ := gouuid.NewV4()
+					timeUUID, _ := uuid.NewV4()
 					uuidStr := string(timeUUID.String())
 					request.Form[core.COOKIE_AUTH_KEY] = []string{uuidStr}
 
@@ -157,4 +202,79 @@ func (this *UserService) FindCacheUsersByUuid(userUuid string) []*User {
 	})
 
 	return users
+}
+
+//remove cache user by its userUuid
+func (this *UserService) RemoveCacheUserByUuid(userUuid string) {
+
+	var sessionId interface{}
+	//let session user work.
+	core.CONTEXT.GetSessionCache().Foreach(func(key interface{}, cacheItem *cache.Item) {
+		if cacheItem == nil || cacheItem.Data() == nil {
+			return
+		}
+		if value, ok := cacheItem.Data().(*User); ok {
+			var user = value
+			if user.Uuid == userUuid {
+				sessionId = key
+				this.logger.Info("sessionId %v", key)
+			}
+		} else {
+			this.logger.Error("cache item not store the *User")
+		}
+	})
+
+	exists := core.CONTEXT.GetSessionCache().Exists(sessionId)
+	if exists {
+		_, err := core.CONTEXT.GetSessionCache().Delete(sessionId)
+		if err != nil {
+			this.logger.Error("occur error when deleting cache user.")
+		}
+	}
+}
+
+//delete user
+func (this *UserService) DeleteUser(request *http.Request, currentUser *User) {
+
+	//delete from cache
+	this.logger.Info("delete from cache userUuid = %s", currentUser.Uuid)
+	this.RemoveCacheUserByUuid(currentUser.Uuid)
+
+	//delete download tokens
+	this.logger.Info("delete download tokens")
+	this.downloadTokenDao.DeleteByUserUuid(currentUser.Uuid)
+
+	//delete upload tokens
+	this.logger.Info("delete upload tokens")
+	this.uploadTokenDao.DeleteByUserUuid(currentUser.Uuid)
+
+	//delete footprints
+	this.logger.Info("delete footprints")
+	this.footprintDao.DeleteByUserUuid(currentUser.Uuid)
+
+	//delete session
+	this.logger.Info("delete session")
+	this.sessionDao.DeleteByUserUuid(currentUser.Uuid)
+
+	//delete shares and bridges
+	this.logger.Info("elete shares and bridges")
+	this.shareService.DeleteSharesByUser(request, currentUser)
+
+	//delete caches
+	this.logger.Info("delete caches")
+	this.imageCacheDao.DeleteByUserUuid(currentUser.Uuid)
+
+	//delete matters
+	this.logger.Info("delete matters")
+	this.matterDao.DeleteByUserUuid(currentUser.Uuid)
+
+	//delete this user
+	this.logger.Info("delete this user.")
+	this.userDao.Delete(currentUser)
+
+	//delete files from disk.
+	this.logger.Info("delete files from disk. %s", GetUserSpaceRootDir(currentUser.Username))
+	err := os.RemoveAll(GetUserSpaceRootDir(currentUser.Username))
+	this.PanicError(err)
+
 }

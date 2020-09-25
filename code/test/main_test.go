@@ -2,10 +2,7 @@ package test
 
 import (
 	"fmt"
-	"github.com/eyebluecn/tank/code/core"
 	"github.com/eyebluecn/tank/code/tool/util"
-	"github.com/robfig/cron"
-	"log"
 	"strings"
 	"testing"
 	"time"
@@ -16,25 +13,10 @@ func TestHello(t *testing.T) {
 	split := strings.Split("good", "/")
 	fmt.Printf("%v", split)
 
-}
-
-func TestCron(t *testing.T) {
-
-	i := 0
-	c := cron.New()
-	spec := "*/1 * * * * ?"
-	err := c.AddFunc(spec, func() {
-		i++
-		log.Println("cron running:", i)
-		if i == 2 {
-			panic("intent to panic.")
-		}
-	})
-	core.PanicError(err)
-
-	c.Start()
-
-	time.Sleep(3 * time.Second)
+	var i int
+	for i = 1; i < 10; i++ {
+		fmt.Printf("i=%d\n", i)
+	}
 
 }
 

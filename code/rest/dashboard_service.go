@@ -3,7 +3,6 @@ package rest
 import (
 	"github.com/eyebluecn/tank/code/core"
 	"github.com/eyebluecn/tank/code/tool/util"
-	"github.com/robfig/cron"
 	"time"
 )
 
@@ -49,25 +48,24 @@ func (this *DashboardService) Init() {
 
 func (this *DashboardService) Bootstrap() {
 
-	this.logger.Info("[cron job] Everyday 00:05 ETL dashboard data.")
-	expression := "0 5 0 * * ?"
-	cronJob := cron.New()
-	err := cronJob.AddFunc(expression, this.etl)
-	core.PanicError(err)
-	cronJob.Start()
+	this.logger.Info("Immediately ETL dashboard data.")
 
 	//do the etl method now.
-	go core.RunWithRecovery(this.etl)
+	go core.RunWithRecovery(this.Etl)
+}
+
+func (this *DashboardService) Etl() {
+	this.etlOneDay(util.Yesterday())
+	this.etlOneDay(time.Now())
 }
 
 // handle the dashboard data.
-func (this *DashboardService) etl() {
+func (this *DashboardService) etlOneDay(thenTime time.Time) {
 
-	this.logger.Info("ETL dashboard data.")
-
-	startTime := util.FirstSecondOfDay(util.Yesterday())
-	endTime := util.LastSecondOfDay(util.Yesterday())
+	startTime := util.FirstSecondOfDay(thenTime)
+	endTime := util.LastSecondOfDay(thenTime)
 	dt := util.ConvertTimeToDateString(startTime)
+	now := time.Now()
 	longTimeAgo := time.Now()
 	longTimeAgo = longTimeAgo.AddDate(-20, 0, 0)
 
@@ -81,19 +79,19 @@ func (this *DashboardService) etl() {
 	}
 
 	invokeNum := this.footprintDao.CountBetweenTime(startTime, endTime)
-	totalInvokeNum := this.footprintDao.CountBetweenTime(longTimeAgo, endTime)
+	totalInvokeNum := this.footprintDao.CountBetweenTime(longTimeAgo, now)
 	uv := this.footprintDao.UvBetweenTime(startTime, endTime)
-	totalUv := this.footprintDao.UvBetweenTime(longTimeAgo, endTime)
+	totalUv := this.footprintDao.UvBetweenTime(longTimeAgo, now)
 	matterNum := this.matterDao.CountBetweenTime(startTime, endTime)
-	totalMatterNum := this.matterDao.CountBetweenTime(longTimeAgo, endTime)
+	totalMatterNum := this.matterDao.CountBetweenTime(longTimeAgo, now)
 
 	matterSize := this.matterDao.SizeBetweenTime(startTime, endTime)
 
-	totalMatterSize := this.matterDao.SizeBetweenTime(longTimeAgo, endTime)
+	totalMatterSize := this.matterDao.SizeBetweenTime(longTimeAgo, now)
 
 	cacheSize := this.imageCacheDao.SizeBetweenTime(startTime, endTime)
 
-	totalCacheSize := this.imageCacheDao.SizeBetweenTime(longTimeAgo, endTime)
+	totalCacheSize := this.imageCacheDao.SizeBetweenTime(longTimeAgo, now)
 
 	avgCost := this.footprintDao.AvgCostBetweenTime(startTime, endTime)
 
